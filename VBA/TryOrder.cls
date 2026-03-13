@@ -1,0 +1,480 @@
+Option Explicit
+
+Private Const MODULE_NAME As String = "TryOrder"
+Private Const DELAY_MS As Long = 200
+Private Const SCROLL_INTO_VIEW_SCRIPT As String = "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});"
+Private webDriver_ As Selenium.WebDriver
+Private target_ As String
+Private inputText_ As String
+Private selectorFind_ As findMode
+Private selectorAsSelect_ As asSelectMode
+Private indexNumber_ As Long
+Private timeoutSec_ As Double
+Private raiseFlag_ As Boolean
+
+'メインメソッドを呼び出す引数
+Public Enum methodType
+    mClick
+    mClear
+    mSendKeys
+    mGetValue
+    mIsSelected
+    mIsEnabled
+    mIsDisplayed
+    mInnerText
+    mAsSelect
+    mGetAttribute
+    mSwitchToFrame
+    mGetSelectText
+    mMoveToElement
+    mFindElement
+    mScrollIntoView
+    mExecuteScript
+End Enum
+
+'AsSelectでのプルダウン選択指定の方法
+Public Enum asSelectMode
+    byText
+    byValue
+    byIndex
+    [_Last]
+End Enum
+
+'FindElementsの検索方法
+Public Enum findMode
+    byId
+    byName
+    byCss
+    byXPath
+    byLinkText
+    [_Last]
+End Enum
+
+'+----------Start アクセサ----------+
+
+'DOMを再取得する為のアクセサ
+Private Property Get webElm() As Object
+
+Select Case SelectorFind
+    Case findMode.byId:       Set webElm = WebDriver.FindElementsById(Target)
+    Case findMode.byName:     Set webElm = WebDriver.FindElementsByName(Target)
+    Case findMode.byCss:      Set webElm = WebDriver.FindElementsByCss(Target)
+    Case findMode.byXPath:    Set webElm = WebDriver.FindElementsByXPath(Target)
+    Case findMode.byLinkText: Set webElm = WebDriver.FindElementsByLinkText(Target)
+End Select
+
+End Property
+
+
+'-----メンバ変数
+'WebDriver
+Public Property Set WebDriver(ByRef WebDriver As Selenium.WebDriver)
+        Set webDriver_ = WebDriver
+End Property
+
+Private Property Get WebDriver() As Selenium.WebDriver
+    If webDriver_ Is Nothing Then
+        Err.Raise 513, Description:="WebDriverがセットされていません"
+    Else
+        Set WebDriver = webDriver_
+    End If
+End Property
+
+
+'検索値
+Public Property Let Target(ByVal Target As String)
+    target_ = Target
+End Property
+
+Private Property Get Target() As String
+    If target_ = "" Then
+        Err.Raise 513, Description:="Targetがセットされていません"
+    Else
+        Target = target_
+    End If
+End Property
+
+'文字列の渡し。スクリプトや入力する値
+Public Property Let InputText(ByVal InputText As String)
+    inputText_ = InputText
+End Property
+
+Private Property Get InputText() As String
+    InputText = inputText_
+End Property
+
+'セレクタ。ByNameやByCss等
+Public Property Let SelectorFind(ByVal SelectorFind As findMode)
+
+    Select Case SelectorFind
+        Case 0 To findMode.[_Last] - 1
+            selectorFind_ = SelectorFind
+        Case Else
+            Err.Raise 513, Description:="不正なセレクター指定です。: " & SelectorFind
+    End Select
+    
+End Property
+
+Private Property Get SelectorFind() As findMode
+    Select Case selectorFind_
+        Case findMode.byId To findMode.[_Last] - 1
+            SelectorFind = selectorFind_
+        Case Else
+            Err.Raise 513, Description:="不正なセレクターを取得しました " & selectorFind_
+    End Select
+End Property
+
+'プルダウン選択の指定、検索の種類
+Public Property Let SelectorAsSelect(ByVal SelectorAsSelect As asSelectMode)
+    Select Case SelectorAsSelect
+        Case 0 To asSelectMode.[_Last] - 1
+            selectorAsSelect_ = SelectorAsSelect
+        Case Else
+            Err.Raise 513, Description:="不正なセレクター指定です。: " & SelectorAsSelect
+    End Select
+End Property
+
+Public Property Get SelectorAsSelect() As asSelectMode
+    Select Case selectorAsSelect_
+        Case 0 To asSelectMode.[_Last] - 1
+            SelectorAsSelect = selectorAsSelect_
+        Case Else
+            Err.Raise 513, Description:="不正なセレクターを取得しました " & selectorAsSelect_
+    End Select
+End Property
+
+'インデックス番号。Item(n)
+Public Property Let IndexNumber(ByVal IndexNumber As Long)
+    indexNumber_ = IndexNumber
+End Property
+
+Private Property Get IndexNumber() As Long
+    IndexNumber = indexNumber_
+End Property
+
+'実行を試行する間の秒数
+Public Property Let TimeoutSec(ByVal TimeoutSec As Double)
+    If TimeoutSec < 0 Then
+        Err.Raise 513, Description:="不正な秒数です。: " & TimeoutSec
+    Else
+        timeoutSec_ = TimeoutSec
+    End If
+End Property
+
+Private Property Get TimeoutSec() As Double
+    If timeoutSec_ < 0 Then
+        TimeoutSec = 10
+    Else
+        TimeoutSec = timeoutSec_
+    End If
+End Property
+
+'実行失敗した際にFalseの戻り値等ではなく、その場でエラーを発報させるかどうかの真偽値
+Public Property Let RaiseFlag(ByVal RaiseFlag As Boolean)
+    raiseFlag_ = RaiseFlag
+End Property
+Private Property Get RaiseFlag() As Boolean
+    RaiseFlag = raiseFlag_
+End Property
+
+
+'+----------End アクセサ----------+
+
+'コンストラクター
+Sub Class_Initialize()
+    Const PROCEDURE_NAME As String = "Class_Initialize"
+    Call ErrorLog.TraceListPush(MODULE_NAME, PROCEDURE_NAME)
+    On Error GoTo ErrorHandler
+    
+    Call ClearProperties
+    
+CleanExit:
+    ErrorLog.TraceListPop
+    Exit Sub
+ErrorHandler:
+        Err.Raise Err.Number, MODULE_NAME & "." & PROCEDURE_NAME, Err.Description
+End Sub
+
+
+
+'----------------------------------------------------------------------------------------------------+
+'----------Title：ClearProperties
+'----------概要：プロパティを初期化する
+'-----Arg：なし
+'-----戻り値：なし
+'----------------------------------------------------------------------------------------------------+
+Public Sub ClearProperties()
+    Set webDriver_ = Nothing
+    target_ = ""
+    inputText_ = ""
+    indexNumber_ = 1
+    selectorFind_ = findMode.byName
+    selectorAsSelect_ = asSelectMode.byIndex
+    timeoutSec_ = 10
+    raiseFlag_ = True
+End Sub
+
+
+'--------------------メインメソッド--------------------+
+
+
+'----------------------------------------------------------------------------------------------------+
+'----------Title：DoAction
+'----------概要：第一引数で指定したメソッドを成功するまで実行し続ける（Enum参照）
+'-----Arg1：実行するメソッド
+'-----戻り値：タイムアウトまでに実行できたかどうかの真偽値
+'----------------------------------------------------------------------------------------------------+
+Public Function DoAction(ByVal method As methodType) As Boolean
+    Const PROCEDURE_NAME As String = "DoAction"
+    Call ErrorLog.TraceListPush(MODULE_NAME, PROCEDURE_NAME & ".Arg(" & method & ")")
+    On Error GoTo ErrorHandler
+    Dim startTime As Double
+    
+    '開始時間からパラメータで指定した秒数の間繰り返す
+    startTime = Timer
+    Do While Timer - startTime < TimeoutSec
+        On Error Resume Next
+        
+        'プロパティに対して指定したメソッドを実行する
+        Select Case method
+            Case methodType.mExecuteScript:      WebDriver.ExecuteScript InputText
+            Case methodType.mClick:              webElm.Item(IndexNumber).Click
+            Case methodType.mClear:              webElm.Item(IndexNumber).Clear
+            Case methodType.mSendKeys:           webElm.Item(IndexNumber).SendKeys InputText
+            Case methodType.mSwitchToFrame:      WebDriver.SwitchToFrame webElm.Item(IndexNumber)
+            Case methodType.mScrollIntoView:     WebDriver.ExecuteScript SCROLL_INTO_VIEW_SCRIPT, webElm.Item(IndexNumber)
+            Case methodType.mMoveToElement:      WebDriver.Actions.MoveToElement(webElm.Item(IndexNumber)).Perform
+            Case mAsSelect
+                Select Case SelectorAsSelect
+                    Case asSelectMode.byText:  webElm.Item(IndexNumber).AsSelect.SelectByText InputText
+                    Case asSelectMode.byValue: webElm.Item(IndexNumber).AsSelect.SelectByValue InputText
+                    Case asSelectMode.byIndex: webElm.Item(IndexNumber).AsSelect.SelectByIndex CLng(InputText)
+                End Select
+            'メソッドの引数に以上がある場合
+            Case Else: Err.Raise 513, Description:="不正なメソッドです。引数を確認してください。"
+        End Select
+        
+        'メソッドが正常に実行された場合、Trueを返却して終了
+        If Err.Number = 0 Then
+            DoAction = True
+            GoTo CleanExit 'Exit
+        End If
+        On Error GoTo ErrorHandler
+        
+        WebDriver.Wait DELAY_MS
+        DoEvents
+    
+    Loop
+    
+    DoAction = False
+    If RaiseFlag Then Err.Raise Number:=513, Description:="DOM読込エラーです。通信状態を確認後、再度実行してください。"
+    
+CleanExit:
+    ErrorLog.TraceListPop
+    Exit Function
+ErrorHandler:
+        Err.Raise Err.Number, MODULE_NAME & "." & PROCEDURE_NAME, Err.Description
+    
+End Function
+
+
+'----------------------------------------------------------------------------------------------------+
+'----------Title：GetResult
+'----------概要：第一引数で指定したメソッドを成功するまで実行し続ける（Enum参照）
+'-----Arg1：実行するメソッド
+'-----戻り値：取得した値を返却
+'----------------------------------------------------------------------------------------------------+
+Public Function GetResult(ByVal method As methodType) As Variant
+    Const PROCEDURE_NAME As String = "GetResult"
+    Call ErrorLog.TraceListPush(MODULE_NAME, PROCEDURE_NAME & ".Arg(" & method & ")")
+    On Error GoTo ErrorHandler
+    
+    Dim scriptStr As String
+    Dim startTime As Double
+    Dim aaa As Object
+    
+    '開始時間からパラメータで指定した秒数の間繰り返す
+    startTime = Timer
+    Do While Timer - startTime < TimeoutSec
+        On Error Resume Next
+
+        'プロパティに対して指定したメソッドを実行し、値を取得する
+        Select Case method
+            '渡されたjsが戻り値を返却するように文頭にreturnを付与する
+            Case methodType.mExecuteScript
+                scriptStr = InputText
+                If Not LCase(scriptStr) Like "return *" Then
+                    scriptStr = "return " & scriptStr
+                End If
+                GetResult = WebDriver.ExecuteScript(scriptStr)
+            Case methodType.mGetValue:      GetResult = webElm.Item(IndexNumber).Value
+            Case methodType.mIsSelected:    GetResult = webElm.Item(IndexNumber).IsSelected
+            Case methodType.mIsEnabled:     GetResult = webElm.Item(IndexNumber).IsEnabled
+            Case methodType.mIsDisplayed:   GetResult = webElm.Item(IndexNumber).IsDisplayed
+            Case methodType.mGetSelectText: GetResult = webElm.Item(IndexNumber).AsSelect.SelectedOption.Text
+            Case methodType.mGetAttribute:  GetResult = webElm.Item(IndexNumber).Attribute(InputText)
+            Case methodType.mFindElement:   If webElm.Count > 0 Then GetResult = True
+            Case methodType.mInnerText: GetResult = GetText()
+            
+            'メソッドの引数に以上がある場合
+            Case Else: Err.Raise 513, Description:="不正なメソッドです。引数を確認してください。"
+        End Select
+
+        'メソッドが正常に実行され、値が返却された場合、Trueを返却して終了
+        If Err.Number = 0 Then
+            GoTo CleanExit 'Exit
+        End If
+        On Error GoTo ErrorHandler
+        
+        WebDriver.Wait DELAY_MS ' 0.2秒刻みでチェック
+        DoEvents
+    
+    Loop
+    
+    GetResult = False
+    If RaiseFlag Then Err.Raise Number:=513, Description:="DOM読込エラーです。通信状態を確認後、再度実行してください。"
+    
+CleanExit:
+    ErrorLog.TraceListPop
+    Exit Function
+ErrorHandler:
+        Err.Raise Err.Number, MODULE_NAME & "." & PROCEDURE_NAME, Err.Description
+    
+End Function
+
+
+'-----内部関数-----+
+
+'----------------------------------------------------------------------------------------------------+
+'----------Title：GetText
+'----------概要：対象のオブジェクトのテキストを配列で取得する
+'-----Arg：なし
+'-----戻り値：取得した値を配列で返却
+'----------------------------------------------------------------------------------------------------+
+Private Function GetText() As Variant
+
+    Dim results() As String
+    Dim curObj As Object
+    Dim cnt As Long
+
+    '取得したオブジェクトの文字列を配列に格納する
+    ReDim results(0 To webElm.Count - 1)
+    For Each curObj In webElm
+        results(cnt) = curObj.Text
+        cnt = cnt + 1
+    Next curObj
+    
+    If Err.Number = 0 Then GetText = results
+
+End Function
+
+
+'--------------------メインメソッドここまで--------------------+
+
+
+
+
+'----------以下おまけの便利関数
+
+'----------------------------------------------------------------------------------------------------+
+'----------Title：FindWindowByTitle
+'----------概要：パラメータで指定した文字列が含まれているウィンドウに切り替える関数
+'-----パラメータ：・WebDriver
+'-----------------・TimeoutSec
+'-----------------・InputText（※検索対象のウィンドウタイトル名）
+'-----戻り値：タイムアウトまでに指定タイトルのウィンドウへの切り替えに成功したかどうかの真偽値
+'----------------------------------------------------------------------------------------------------+
+Public Function FindWindowByTitle() As Boolean
+    Const PROCEDURE_NAME As String = "FindWindowByTitle"
+    Call ErrorLog.TraceListPush(MODULE_NAME, PROCEDURE_NAME)
+    On Error GoTo ErrorHandler
+   
+    Dim startTime As Double
+    Dim i As Long
+    Dim hwnds As Selenium.List
+    
+    Set hwnds = WebDriver.Send("GET", "/window_handles")
+    FindWindowByTitle = False
+    
+    '開始時間からパラメータで指定した秒数の間繰り返す
+    startTime = Timer
+    Do While Timer - startTime < TimeoutSec
+    
+        'オブジェクトのウィンドウタイトルを一週分順番に切り替え、参照中ウィンドウタイトルに指定した文字列が含まれている場合、正常終了する
+        ' ※perLoppにしてるのは用意されたメソッドでは現在のハンドルが取得する方法がない為、ハンドル分switchする事で見つからない場合でも
+        '　　最初のウィンドウの参照へリセットできるようにした
+        For i = 1 To WebDriver.Windows.Count
+        On Error Resume Next
+            '参照中ウィンドウタイトルに第二引数の文字列が含まれていれば正常終了
+            If InStr(WebDriver.Window.Title, InputText) > 0 Then
+                '直前の閉じる等で.Window.titleが消失している状態の場合はエラーを起こし、On Error Resume Nextで握り潰すと
+                '条件式を無視してそのまま通過してしまう為ここでハンドリングする
+                If Err.Number = 0 Then
+                    WebDriver.Wait DELAY_MS
+                    FindWindowByTitle = True
+                    GoTo CleanExit 'Exit
+                End If
+            End If
+
+            '次のウィンドウへ切り替える
+            
+            WebDriver.SwitchToNextWindow
+            '最後尾の時点で次のウィンドウへ切り替えをするとエラーが発生するので、エラー時は最初のウィンドウに切り替える
+            If Err.Number <> 0 Then
+                WebDriver.Window.SwitchToWindowByName hwnds.Item(1)
+                Err.Number = 0
+            End If
+            On Error GoTo ErrorHandler
+
+        Next i
+        WebDriver.Wait DELAY_MS
+    Loop
+
+    
+CleanExit:
+    ErrorLog.TraceListPop
+    Exit Function
+ErrorHandler:
+        Err.Raise Err.Number, MODULE_NAME & "." & PROCEDURE_NAME, Err.Description
+End Function
+
+
+
+'----------------------------------------------------------------------------------------------------+
+'----------Title：FindAlert
+'----------概要：パラメータで指定したwebDriverのオブジェクトでアラートダイアログが表示されていればそれを返却する
+'-----パラメータ：・WebDriver
+'-----------------・TimeoutSec
+'-----戻り値：タイムアウトまでにアラートが発見できた場合、アラートのオブジェクトを返却
+'-----ヒント：この関数の戻り値がNot Nothingなら.Acceptをしてアラートを閉じる等の用法が考えられる
+'----------------------------------------------------------------------------------------------------+
+Public Function FindAlert() As Object
+    Const PROCEDURE_NAME As String = "FindAlert"
+    Call ErrorLog.TraceListPush(MODULE_NAME, PROCEDURE_NAME)
+    On Error GoTo ErrorHandler
+   
+    Dim alertObj As Object
+    Dim startTime As Double
+    Set FindAlert = Nothing
+
+    '開始時間からパラメータで指定した秒数の間繰り返す
+    On Error Resume Next ' エラーを一時的に無視
+    startTime = Timer
+    Do While Timer < startTime + TimeoutSec
+        ' アラートの切り替えを試みる
+        Set alertObj = WebDriver.SwitchToAlert()
+        'アラートダイアログを発見
+        If Err.Number = 0 Then
+            Set FindAlert = alertObj
+            GoTo CleanExit 'Exit
+        End If
+        WebDriver.Wait DELAY_MS
+    Loop
+    On Error GoTo ErrorHandler
+    
+CleanExit:
+    ErrorLog.TraceListPop
+    Exit Function
+ErrorHandler:
+        Err.Raise Err.Number, MODULE_NAME & "." & PROCEDURE_NAME, Err.Description
+End Function
