@@ -1,4 +1,4 @@
-import tkinter as tk
+gimport tkinter as tk
 import win32gui
 
 class WindowSelector:
