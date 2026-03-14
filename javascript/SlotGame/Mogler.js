@@ -144,34 +144,3 @@
         }
     } 
 }
-
-
-
-
-
-let tes = new Mogler(6);
-
-while(true) {
-    var ret = tes.spinResult()
-
-if (tes.getData("stock")) {
-        console.log("当たり")
-        console.log(tes.getData("stock"))
-        console.log(tes.getData("total"))
-        console.log(tes.getData("history"))
-}
-
-    if (tes.getData("total") > 10000) {
-        console.log(tes.getData("total"))
-        console.log(tes.getData("spin"))
-        console.log(tes.getData("history"))
-        break;
-    }
-   
-}
-
-
-//めも
-/*
-カチカチくん購入で全フラグ見えるようにする
-*/
