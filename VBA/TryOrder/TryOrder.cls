@@ -13,23 +13,27 @@ Private timeoutSec_ As Double
 Private raiseFlag_ As Boolean
 
 'メインメソッドを呼び出す引数
-Public Enum methodType
+Public Enum methodDo
+    mExecuteScript
     mClick
     mClear
     mSendKeys
+    mSwitchToFrame
+    mScrollIntoView
+    mMoveToElement
+    mAsSelect
+End Enum
+
+Public Enum methodGet
+    mExecuteScript
     mGetValue
     mIsSelected
     mIsEnabled
     mIsDisplayed
-    mInnerText
-    mAsSelect
-    mGetAttribute
-    mSwitchToFrame
     mGetSelectText
-    mMoveToElement
+    mGetAttribute
     mFindElement
-    mScrollIntoView
-    mExecuteScript
+    mInnerText
 End Enum
 
 'AsSelectでのプルダウン選択指定の方法
@@ -47,6 +51,8 @@ Public Enum findMode
     byCss
     byXPath
     byLinkText
+    byTag
+    byClass
     [_Last]
 End Enum
 
@@ -61,6 +67,8 @@ Select Case SelectorFind
     Case findMode.byCss:      Set webElm = WebDriver.FindElementsByCss(Target)
     Case findMode.byXPath:    Set webElm = WebDriver.FindElementsByXPath(Target)
     Case findMode.byLinkText: Set webElm = WebDriver.FindElementsByLinkText(Target)
+    Case findMode.byTag:      Set webElm = WebDriver.FindElementsByTag(Target)
+    Case findMode.byClass:    Set webElm = WebDriver.FindElementsByClass(Target)
 End Select
 
 End Property
@@ -224,7 +232,7 @@ End Sub
 '-----Arg1：実行するメソッド
 '-----戻り値：タイムアウトまでに実行できたかどうかの真偽値
 '----------------------------------------------------------------------------------------------------+
-Public Function DoAction(ByVal method As methodType) As Boolean
+Public Function DoAction(ByVal method As methodDo) As Boolean
     Const PROCEDURE_NAME As String = "DoAction"
     Call ErrorLog.TraceListPush(MODULE_NAME, PROCEDURE_NAME & ".Arg(" & method & ")")
     On Error GoTo ErrorHandler
@@ -237,14 +245,14 @@ Public Function DoAction(ByVal method As methodType) As Boolean
         
         'プロパティに対して指定したメソッドを実行する
         Select Case method
-            Case methodType.mExecuteScript:      WebDriver.ExecuteScript InputText
-            Case methodType.mClick:              webElm.Item(IndexNumber).Click
-            Case methodType.mClear:              webElm.Item(IndexNumber).Clear
-            Case methodType.mSendKeys:           webElm.Item(IndexNumber).SendKeys InputText
-            Case methodType.mSwitchToFrame:      WebDriver.SwitchToFrame webElm.Item(IndexNumber)
-            Case methodType.mScrollIntoView:     WebDriver.ExecuteScript SCROLL_INTO_VIEW_SCRIPT, webElm.Item(IndexNumber)
-            Case methodType.mMoveToElement:      WebDriver.Actions.MoveToElement(webElm.Item(IndexNumber)).Perform
-            Case mAsSelect
+            Case methodDo.mExecuteScript:      WebDriver.ExecuteScript InputText
+            Case methodDo.mClick:              webElm.Item(IndexNumber).Click
+            Case methodDo.mClear:              webElm.Item(IndexNumber).Clear
+            Case methodDo.mSendKeys:           webElm.Item(IndexNumber).SendKeys InputText
+            Case methodDo.mSwitchToFrame:      WebDriver.SwitchToFrame webElm.Item(IndexNumber)
+            Case methodDo.mScrollIntoView:     WebDriver.ExecuteScript SCROLL_INTO_VIEW_SCRIPT, webElm.Item(IndexNumber)
+            Case methodDo.mMoveToElement:      WebDriver.Actions.MoveToElement(webElm.Item(IndexNumber)).Perform
+            Case methodDo.mAsSelect
                 Select Case SelectorAsSelect
                     Case asSelectMode.byText:  webElm.Item(IndexNumber).AsSelect.SelectByText InputText
                     Case asSelectMode.byValue: webElm.Item(IndexNumber).AsSelect.SelectByValue InputText
@@ -284,14 +292,13 @@ End Function
 '-----Arg1：実行するメソッド
 '-----戻り値：取得した値を返却
 '----------------------------------------------------------------------------------------------------+
-Public Function GetResult(ByVal method As methodType) As Variant
+Public Function GetResult(ByVal method As methodGet) As Variant
     Const PROCEDURE_NAME As String = "GetResult"
     Call ErrorLog.TraceListPush(MODULE_NAME, PROCEDURE_NAME & ".Arg(" & method & ")")
     On Error GoTo ErrorHandler
     
     Dim scriptStr As String
     Dim startTime As Double
-    Dim aaa As Object
     
     '開始時間からパラメータで指定した秒数の間繰り返す
     startTime = Timer
@@ -301,20 +308,20 @@ Public Function GetResult(ByVal method As methodType) As Variant
         'プロパティに対して指定したメソッドを実行し、値を取得する
         Select Case method
             '渡されたjsが戻り値を返却するように文頭にreturnを付与する
-            Case methodType.mExecuteScript
+            Case methodGet.mExecuteScript
                 scriptStr = InputText
                 If Not LCase(scriptStr) Like "return *" Then
                     scriptStr = "return " & scriptStr
                 End If
                 GetResult = WebDriver.ExecuteScript(scriptStr)
-            Case methodType.mGetValue:      GetResult = webElm.Item(IndexNumber).Value
-            Case methodType.mIsSelected:    GetResult = webElm.Item(IndexNumber).IsSelected
-            Case methodType.mIsEnabled:     GetResult = webElm.Item(IndexNumber).IsEnabled
-            Case methodType.mIsDisplayed:   GetResult = webElm.Item(IndexNumber).IsDisplayed
-            Case methodType.mGetSelectText: GetResult = webElm.Item(IndexNumber).AsSelect.SelectedOption.Text
-            Case methodType.mGetAttribute:  GetResult = webElm.Item(IndexNumber).Attribute(InputText)
-            Case methodType.mFindElement:   If webElm.Count > 0 Then GetResult = True
-            Case methodType.mInnerText: GetResult = GetText()
+            Case methodGet.mGetValue:      GetResult = webElm.Item(IndexNumber).Value
+            Case methodGet.mIsSelected:    GetResult = webElm.Item(IndexNumber).IsSelected
+            Case methodGet.mIsEnabled:     GetResult = webElm.Item(IndexNumber).IsEnabled
+            Case methodGet.mIsDisplayed:   GetResult = webElm.Item(IndexNumber).IsDisplayed
+            Case methodGet.mGetSelectText: GetResult = webElm.Item(IndexNumber).AsSelect.SelectedOption.Text
+            Case methodGet.mGetAttribute:  GetResult = webElm.Item(IndexNumber).Attribute(InputText)
+            Case methodGet.mFindElement:   GetResult = webElm.count
+            Case methodGet.mInnerText:     GetResult = GetText()
             
             'メソッドの引数に以上がある場合
             Case Else: Err.Raise 513, Description:="不正なメソッドです。引数を確認してください。"
@@ -358,7 +365,7 @@ Private Function GetText() As Variant
     Dim cnt As Long
 
     '取得したオブジェクトの文字列を配列に格納する
-    ReDim results(0 To webElm.Count - 1)
+    ReDim results(0 To webElm.count - 1)
     For Each curObj In webElm
         results(cnt) = curObj.Text
         cnt = cnt + 1
@@ -403,7 +410,7 @@ Public Function FindWindowByTitle() As Boolean
         'オブジェクトのウィンドウタイトルを一週分順番に切り替え、参照中ウィンドウタイトルに指定した文字列が含まれている場合、正常終了する
         ' ※perLoppにしてるのは用意されたメソッドでは現在のハンドルが取得する方法がない為、ハンドル分switchする事で見つからない場合でも
         '　　最初のウィンドウの参照へリセットできるようにした
-        For i = 1 To WebDriver.Windows.Count
+        For i = 1 To WebDriver.Windows.count
         On Error Resume Next
             '参照中ウィンドウタイトルに第二引数の文字列が含まれていれば正常終了
             If InStr(WebDriver.Window.Title, InputText) > 0 Then
@@ -448,7 +455,7 @@ End Function
 '-----戻り値：タイムアウトまでにアラートが発見できた場合、アラートのオブジェクトを返却
 '-----ヒント：この関数の戻り値がNot Nothingなら.Acceptをしてアラートを閉じる等の用法が考えられる
 '----------------------------------------------------------------------------------------------------+
-Public Function FindAlert() As Object
+Public Function FindAlert(Optional ByVal onClickFlg As Boolean = False) As Object
     Const PROCEDURE_NAME As String = "FindAlert"
     Call ErrorLog.TraceListPush(MODULE_NAME, PROCEDURE_NAME)
     On Error GoTo ErrorHandler
@@ -465,6 +472,8 @@ Public Function FindAlert() As Object
         Set alertObj = WebDriver.SwitchToAlert()
         'アラートダイアログを発見
         If Err.Number = 0 Then
+            If onClickFlg Then alertObj.Accept
+            
             Set FindAlert = alertObj
             GoTo CleanExit 'Exit
         End If
