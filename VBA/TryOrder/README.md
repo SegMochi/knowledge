@@ -90,6 +90,9 @@ End With
 2. **ErrorLogクラス** 本コードはErrorLogという名前の独自ログ管理クラスを参照しています。環境に合わせて該当箇所をコメントアウト、または修正してください。
 3. **インデックス** IndexNumberのデフォルト値は1に設定されています（SeleniumのItemインデックスに準拠）。
 
+## その他
+drft.clsはウィンドウタイトル指定をSwitchToWindowの繰り返しをせずショートカットしてフォーカスする為の考えの試作
+
 
 ## ライセンス
 このプロジェクトは **[MITライセンス](https://opensource.org/licenses/mit-license.php)** の下で公開されています。
